@@ -507,7 +507,16 @@ public class KafkaAssemblyOperator extends AbstractAssemblyOperator<KubernetesCl
         }
 
         Future<ReconciliationState> zkScaleUp() {
-            return withVoid(zkSetOperations.scaleUp(namespace, zkCluster.getName(), zkCluster.getReplicas()));
+            int currentReplicas = 0;
+            StatefulSet ss = zkSetOperations.get(namespace, ZookeeperCluster.zookeeperClusterName(name));
+            if (ss != null) {
+                currentReplicas = ss.getSpec().getReplicas();
+            }
+            Future<Integer> result = Future.succeededFuture(currentReplicas);
+            for (int i = currentReplicas + 1; i <= zkCluster.getReplicas(); i++) {
+                result.compose(scaleTo -> zkSetOperations.scaleUp(namespace, zkCluster.getName(), scaleTo + 1));
+            }
+            return withVoid(result);
         }
 
         Future<ReconciliationState> zkServiceEndpointReadiness() {
